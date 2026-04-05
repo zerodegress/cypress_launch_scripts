@@ -9,6 +9,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -37,6 +38,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--server-ip", required=True)
     parser.add_argument("--username", required=True)
     parser.add_argument("--server-password", default="")
+    parser.add_argument("--ea-launcher", type=Path, required=True, help="Path to EA launcher executable")
+    parser.add_argument("--ea-delay-seconds", type=int, default=30, help="Seconds to wait after launching EA")
     parser.add_argument("--additional-args", default="")
     parser.add_argument("--fov", type=float, default=None)
     parser.add_argument("--use-mods", action="store_true")
@@ -100,6 +103,59 @@ def build_command(runner: str, exe_path: Path, exe_args: list[str]) -> list[str]
     if runner == "wine":
         return ["wine", str(exe_path), *exe_args]
     raise ValueError(f"Unsupported runner: {runner}")
+
+
+def build_proton_dual_launch_command(
+    runner: str, script_path: Path
+) -> list[str]:
+    if runner not in {"umu-run", "wine"}:
+        raise ValueError(f"Unsupported proton runner: {runner}")
+    launcher = "umu-run" if runner == "umu-run" else "wine"
+    return [launcher, r"C:\windows\system32\cmd.exe", "/c", unix_to_wine_host_path(script_path)]
+
+
+def join_windows_path(base_dir: str, name: str) -> str:
+    base = base_dir.rstrip("\\/")
+    return f"{base}\\{name}"
+
+
+def normalize_windows_path(path: str) -> str:
+    return path.replace("/", "\\")
+
+
+def unix_to_wine_host_path(path: Path) -> str:
+    return f"Z:{str(path.resolve()).replace('/', '\\')}"
+
+
+def escape_batch_value(value: str) -> str:
+    return value.replace("%", "%%").replace('"', '^"')
+
+
+def write_proton_launch_script(
+    ea_launcher: str,
+    game_exe_path: str,
+    game_args: list[str],
+    env_vars: dict[str, str],
+    ea_delay_seconds: int,
+) -> Path:
+    fd, temp_path = tempfile.mkstemp(prefix="cypress_launch_", suffix=".bat")
+    os.close(fd)
+    script_path = Path(temp_path)
+    ea_line = subprocess.list2cmdline([ea_launcher])
+    game_line = subprocess.list2cmdline([game_exe_path, *game_args])
+    env_lines = [f'set "{key}={escape_batch_value(value)}"' for key, value in env_vars.items()]
+    content = "\r\n".join(
+        [
+            "@echo off",
+            *env_lines,
+            f"start \"\" /b {ea_line}",
+            f"ping -n {ea_delay_seconds + 1} 127.0.0.1 >nul",
+            game_line,
+            "",
+        ]
+    )
+    script_path.write_text(content, encoding="utf-8", newline="\r\n")
+    return script_path
 
 
 def ensure_patched_exe(game: str, game_dir: Path, launcher_dir: Path, runner: str) -> str:
@@ -167,12 +223,8 @@ def validate_inputs(ns: argparse.Namespace, launcher_dir: Path, game_dir: Path) 
         raise ValueError("Username cannot exceed 32 characters.")
     if not ns.server_ip.strip():
         raise ValueError("Server IP cannot be empty.")
-    if not game_dir.exists():
-        raise FileNotFoundError(f"Game directory not found: {game_dir}")
-
-    exe_path = game_dir / EXECUTABLES[ns.game]
-    if not exe_path.exists():
-        raise FileNotFoundError(f"Game executable not found: {exe_path}")
+    if ns.ea_delay_seconds < 0:
+        raise ValueError("--ea-delay-seconds must be >= 0.")
 
     server_dll = launcher_dir / f"cypress_{ns.game}.dll"
     if not server_dll.exists():
@@ -184,47 +236,93 @@ def validate_inputs(ns: argparse.Namespace, launcher_dir: Path, game_dir: Path) 
 
 def main() -> int:
     ns = parse_args()
-    game_dir = ns.game_dir.expanduser().resolve()
     launcher_dir = ns.launcher_dir.expanduser().resolve()
-    target_dll = game_dir / "dinput8.dll"
+    proton_script_path: Path | None = None
+    is_proton_runner = False
+    target_dll: Path | None = None
 
     try:
-        validate_inputs(ns, launcher_dir, game_dir)
         runner = resolve_runner(ns.runner)
+        is_proton_runner = runner in {"umu-run", "wine"}
+        game_dir = Path(str(ns.game_dir)) if is_proton_runner else ns.game_dir.expanduser().resolve()
+        ea_launcher = (
+            normalize_windows_path(str(ns.ea_launcher))
+            if is_proton_runner
+            else str(ns.ea_launcher.expanduser().resolve())
+        )
+        target_dll = game_dir / "dinput8.dll"
 
-        exe_name = ensure_patched_exe(ns.game, game_dir, launcher_dir, runner)
+        validate_inputs(ns, launcher_dir, game_dir)
+
+        if is_proton_runner:
+            exe_name = PATCHED_EXECUTABLES.get(ns.game, EXECUTABLES[ns.game])
+        else:
+            exe_name = ensure_patched_exe(ns.game, game_dir, launcher_dir, runner)
         launch_args = build_launch_args(ns, game_dir)
 
         source_dll = launcher_dir / f"cypress_{ns.game}.dll"
-        if not target_dll.exists():
-            shutil.copy2(source_dll, target_dll)
+        if not is_proton_runner:
+            assert target_dll is not None
+            if not target_dll.exists():
+                shutil.copy2(source_dll, target_dll)
 
         env = os.environ.copy()
-        env["EARtPLaunchCode"] = get_rtp_launch_code()
-        env["ContentId"] = "1026482"
-        env["GW_LAUNCH_ARGS"] = subprocess.list2cmdline(launch_args)
-        if ns.use_mods:
-            env["GAME_DATA_DIR"] = str(game_dir / "ModData" / ns.mod_pack)
-        else:
-            env.pop("GAME_DATA_DIR", None)
+        if not is_proton_runner:
+            env["EARtPLaunchCode"] = get_rtp_launch_code()
+            env["ContentId"] = "1026482"
+            env["GW_LAUNCH_ARGS"] = subprocess.list2cmdline(launch_args)
+            if ns.use_mods:
+                env["GAME_DATA_DIR"] = str(game_dir / "ModData" / ns.mod_pack)
+            else:
+                env.pop("GAME_DATA_DIR", None)
         if runner == "umu-run":
             env.setdefault("GAMEID", "cypresslauncher")
 
-        game_cmd = build_command(runner, game_dir / exe_name, launch_args)
+        if is_proton_runner:
+            game_dir_win = normalize_windows_path(str(ns.game_dir))
+            game_exe_path = join_windows_path(game_dir_win, exe_name)
+            proton_env = {
+                "EARtPLaunchCode": get_rtp_launch_code(),
+                "ContentId": "1026482",
+                "GW_LAUNCH_ARGS": subprocess.list2cmdline(launch_args),
+                "GAME_DATA_DIR": (
+                    join_windows_path(join_windows_path(game_dir_win, "ModData"), ns.mod_pack)
+                    if ns.use_mods
+                    else ""
+                ),
+            }
+            proton_script_path = write_proton_launch_script(
+                ea_launcher, game_exe_path, launch_args, proton_env, ns.ea_delay_seconds
+            )
+            game_cmd = build_proton_dual_launch_command(runner, proton_script_path)
+        else:
+            game_cmd = build_command(runner, game_dir / exe_name, launch_args)
         print("Launch command:", subprocess.list2cmdline(game_cmd))
         if ns.dry_run:
             return 0
 
-        process = subprocess.Popen(game_cmd, cwd=str(game_dir), env=env)
-        print(f"Game launched (PID {process.pid})")
-        exit_code = process.wait()
-        print(f"Game exited with code 0x{exit_code:X}")
+        launch_cwd = str(launcher_dir) if is_proton_runner else str(game_dir)
+        if runner == "native":
+            ea_process = subprocess.Popen([ea_launcher], cwd=launch_cwd, env=env)
+            print(f"EA launcher started (PID {ea_process.pid})")
+            process = subprocess.Popen(game_cmd, cwd=launch_cwd, env=env)
+            print(f"Game launched (PID {process.pid})")
+            exit_code = process.wait()
+            print(f"Game exited with code 0x{exit_code:X}")
+        else:
+            process = subprocess.Popen(game_cmd, cwd=launch_cwd, env=env)
+            print(f"Game launched (PID {process.pid})")
+            exit_code = process.wait()
+            print(f"Game exited with code 0x{exit_code:X}")
     except Exception as exc:
         print(f"Launch failed: {exc}", file=sys.stderr)
         return 1
     finally:
         try:
-            target_dll.unlink(missing_ok=True)
+            if not is_proton_runner and target_dll is not None:
+                target_dll.unlink(missing_ok=True)
+            if proton_script_path is not None:
+                proton_script_path.unlink(missing_ok=True)
         except Exception:
             pass
     return 0
