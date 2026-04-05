@@ -2,7 +2,7 @@
 
 Chinese version: [README_ZH.md](README_ZH.md)
 
-Scripts for launching Cypress client/server on Linux.
+Scripts for launching Cypress client/server.
 
 ## Linux Client Usage (`cypress_launch.py`)
 
@@ -20,12 +20,12 @@ WINEPREFIX=/path/to/prefix \
 PROTONPATH=/path/to/proton \
 ./cypress_launch.py \
   --game GW2 \
-  --game-dir "C:/Program Files/EA Games/Plants vs Zombies Garden Warfare 2" \
+  --game-dir "/path/to/game" \
   --server-ip 127.0.0.1:25200 \
   --username your_name \
   --runner umu-run \
   --launcher-dir ~/Downloads/CypressLauncher-vX.Y.Z \
-  --ea-launcher "C:/Program Files/Electronic Arts/EA Desktop/.../EALauncher.exe" \
+  --ea-launcher "/path/to/ea/launcher" \
   --use-mods \
   --mod-pack Default
 ```
@@ -58,6 +58,10 @@ If you want a full shutdown, close EA App manually.
 Use `cypress_launch_server.py` for dedicated server launch.  
 It does not require `--ea-launcher`.
 
+Server rule:
+- `--level` is optional.
+- If `--level` is empty, you must pass both `--use-playlist` and `--playlist`.
+
 ### Linux Dedicated Server Example
 
 ```bash
@@ -65,12 +69,28 @@ WINEPREFIX=/path/to/prefix \
 PROTONPATH=/path/to/proton \
 ./cypress_launch_server.py \
   --game GW2 \
-  --game-dir /home/zerodegress/Games/ea-app/drive_c/Program\ Files/EA\ Games/Plants\ vs\ Zombies\ Garden\ Warfare\ 2 \
+  --game-dir /path/to/game/drive_c/Program\ Files/EA\ Games/Plants\ vs\ Zombies\ Garden\ Warfare\ 2 \
   --device-ip 127.0.0.1 \
   --level Level_Coop_ZombossFactory \
   --inclusion 'GameMode=GraveyardOps0;TOD=Day;HostedMode=ServerHosted' \
-  --launcher-dir ~/Downloads/CypressLauncher-vX.Y.Z \
+  --launcher-dir /path/to/CypressLauncher-vX.Y.Z \
   --runner umu-run \
   --use-mods \
   --mod-pack Default
+```
+
+### Linux Dedicated Server Example (Playlist Without `--level`)
+
+```bash
+WINEPREFIX=/path/to/wineprefix \
+PROTONPATH=/path/to/proton \
+./cypress_launch_server.py \
+  --game GW2 \
+  --game-dir /path/to/game/drive_c/Program\ Files/EA\ Games/Plants\ vs\ Zombies\ Garden\ Warfare\ 2 \
+  --device-ip 127.0.0.1 \
+  --inclusion 'HostedMode=ServerHosted' \
+  --use-playlist \
+  --playlist OpsPlaylist.json \
+  --launcher-dir /path/to/CypressLauncher-vX.Y.Z \
+  --runner umu-run
 ```

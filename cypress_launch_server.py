@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--game", choices=["GW1", "GW2", "BFN"], required=True)
     parser.add_argument("--game-dir", type=Path, required=True)
     parser.add_argument("--device-ip", required=True)
-    parser.add_argument("--level", required=True, help="GW1/GW2 level or BFN dsub")
+    parser.add_argument("--level", default="", help="GW1/GW2 level or BFN dsub")
     parser.add_argument("--inclusion", required=True)
     parser.add_argument("--start-point", default="", help="BFN only")
     parser.add_argument("--server-password", default="")
@@ -152,8 +152,6 @@ def build_server_args(ns: argparse.Namespace, game_dir: Path) -> list[str]:
     if ns.game in {"GW1", "GW2"}:
         args = [
             "-server",
-            "-level",
-            ns.level,
             "-listen",
             ns.device_ip,
             "-inclusion",
@@ -162,6 +160,8 @@ def build_server_args(ns: argparse.Namespace, game_dir: Path) -> list[str]:
             "-Network.ServerAddress",
             ns.device_ip,
         ]
+        if ns.level.strip():
+            args[1:1] = ["-level", ns.level]
         if ns.server_password.strip():
             args.extend(["-Server.ServerPassword", ns.server_password.strip()])
         args.extend(playlist_args)
@@ -173,8 +173,6 @@ def build_server_args(ns: argparse.Namespace, game_dir: Path) -> list[str]:
             "-server",
             "-listen",
             ns.device_ip,
-            "-dsub",
-            ns.level,
             "-inclusion",
             ns.inclusion,
             "-startpoint",
@@ -184,6 +182,8 @@ def build_server_args(ns: argparse.Namespace, game_dir: Path) -> list[str]:
             "-Network.ServerAddress",
             ns.device_ip,
         ]
+        if ns.level.strip():
+            args[3:3] = ["-dsub", ns.level]
         if ns.server_password.strip():
             args.extend(["-Server.ServerPassword", ns.server_password.strip()])
         args.extend(playlist_args)
@@ -212,8 +212,8 @@ def build_server_args(ns: argparse.Namespace, game_dir: Path) -> list[str]:
 def validate_inputs(ns: argparse.Namespace, launcher_dir: Path, game_dir: Path) -> None:
     if not ns.device_ip.strip():
         raise ValueError("Device IP cannot be empty.")
-    if not ns.level.strip():
-        raise ValueError("Level/DSub cannot be empty.")
+    if not ns.level.strip() and not (ns.use_playlist and ns.playlist.strip()):
+        raise ValueError("When --level is empty, both --use-playlist and --playlist are required.")
     if not ns.inclusion.strip():
         raise ValueError("Inclusion cannot be empty.")
     if not game_dir.exists():

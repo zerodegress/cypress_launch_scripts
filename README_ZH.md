@@ -2,7 +2,7 @@
 
 英文版请看: [README.md](README.md)
 
-Linux 下用于启动 Cypress 客户端/服务端的脚本。
+用于启动 Cypress 客户端/服务端的脚本。
 
 ## Linux 客户端使用（`cypress_launch.py`）
 
@@ -20,12 +20,12 @@ WINEPREFIX=/path/to/prefix \
 PROTONPATH=/path/to/proton \
 ./cypress_launch.py \
   --game GW2 \
-  --game-dir "C:/Program Files/EA Games/Plants vs Zombies Garden Warfare 2" \
+  --game-dir "/path/to/game" \
   --server-ip 127.0.0.1:25200 \
   --username your_name \
   --runner umu-run \
   --launcher-dir ~/Downloads/CypressLauncher-vX.Y.Z \
-  --ea-launcher "C:/Program Files/Electronic Arts/EA Desktop/.../EALauncher.exe" \
+  --ea-launcher "/path/to/ea/launcher" \
   --use-mods \
   --mod-pack Default
 ```
@@ -57,6 +57,10 @@ PROTONPATH=/path/to/proton \
 
 服务端使用 `cypress_launch_server.py`，不需要 `--ea-launcher`。
 
+服务端规则：
+- `--level` 现在可选。
+- 如果 `--level` 为空，必须同时提供 `--use-playlist` 和 `--playlist`。
+
 ### Linux 服务端启动示例
 
 ```bash
@@ -64,12 +68,28 @@ WINEPREFIX=/path/to/prefix \
 PROTONPATH=/path/to/proton \
 ./cypress_launch_server.py \
   --game GW2 \
-  --game-dir /home/zerodegress/Games/ea-app/drive_c/Program\ Files/EA\ Games/Plants\ vs\ Zombies\ Garden\ Warfare\ 2 \
+  --game-dir /path/to/game/drive_c/Program\ Files/EA\ Games/Plants\ vs\ Zombies\ Garden\ Warfare\ 2 \
   --device-ip 127.0.0.1 \
   --level Level_Coop_ZombossFactory \
   --inclusion 'GameMode=GraveyardOps0;TOD=Day;HostedMode=ServerHosted' \
-  --launcher-dir ~/Downloads/CypressLauncher-vX.Y.Z \
+  --launcher-dir /path/to/CypressLauncher-vX.Y.Z \
   --runner umu-run \
   --use-mods \
   --mod-pack Default
+```
+
+### Linux 服务端 Playlist 启动示例（不填 `--level`）
+
+```bash
+WINEPREFIX=/path/to/wineprefix \
+PROTONPATH=/path/to/proton \
+./cypress_launch_server.py \
+  --game GW2 \
+  --game-dir /path/to/game/drive_c/Program\ Files/EA\ Games/Plants\ vs\ Zombies\ Garden\ Warfare\ 2 \
+  --device-ip 127.0.0.1 \
+  --inclusion 'HostedMode=ServerHosted' \
+  --use-playlist \
+  --playlist OpsPlaylist.json \
+  --launcher-dir /path/to/CypressLauncher-vX.Y.Z \
+  --runner umu-run
 ```
