@@ -45,7 +45,8 @@ PROTONPATH=/path/to/proton \
 - Windows-style paths, e.g. `C:/Program Files/...`
 - Linux-style paths, e.g. `/home/user/Games/...`
 
-In Proton mode, the script handles path conversion automatically.
+For Linux users, Linux-style paths are recommended.  
+Windows-style path behavior is still preserved for compatibility.
 
 ### 5) Shutdown Note
 

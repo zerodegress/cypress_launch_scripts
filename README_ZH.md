@@ -45,7 +45,8 @@ PROTONPATH=/path/to/proton \
 - Windows 路径：例如 `C:/Program Files/...`
 - Linux 路径：例如 `/home/user/Games/...`
 
-脚本会在 Proton 模式下自动处理路径转换。
+建议 Linux 用户优先使用 Linux 路径。  
+同时会保留 Windows 路径的兼容行为。
 
 ### 5) 退出注意事项
 

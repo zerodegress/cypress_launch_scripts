@@ -114,19 +114,8 @@ def build_proton_dual_launch_command(
     return [launcher, r"C:\windows\system32\cmd.exe", "/c", unix_to_wine_host_path(script_path)]
 
 
-def is_windows_path(path: str) -> bool:
-    return len(path) >= 3 and path[1] == ":" and path[2] in {"\\", "/"}
-
-
 def unix_to_wine_host_path(path: Path) -> str:
     return f"Z:{str(path.resolve()).replace('/', '\\')}"
-
-
-def proton_path_to_windows(path: str) -> str:
-    if is_windows_path(path):
-        return path.replace("/", "\\")
-    return f"Z:{path.replace('/', '\\')}"
-
 
 def escape_batch_value(value: str) -> str:
     return value.replace("%", "%%").replace('"', '^"')
@@ -135,32 +124,29 @@ def escape_batch_value(value: str) -> str:
 def write_proton_launch_script(
     ea_launcher: str,
     game_exe_path: str,
-    exe_name: str,
     game_args: list[str],
     env_vars: dict[str, str],
     ea_delay_seconds: int,
-    mod_pack: str | None,
 ) -> Path:
     fd, temp_path = tempfile.mkstemp(prefix="cypress_launch_", suffix=".bat")
     os.close(fd)
     script_path = Path(temp_path)
     game_args_line = subprocess.list2cmdline(game_args)
     env_lines = [f'set "{key}={escape_batch_value(value)}"' for key, value in env_vars.items()]
-    mod_data_lines = ['set "GAME_DATA_DIR="']
-    if mod_pack:
-        mod_data_lines = [f'set "GAME_DATA_DIR=%GAME_DIR_WIN%\\ModData\\{escape_batch_value(mod_pack)}"']
-    game_dir_win = game_exe_path[: -(len(exe_name) + 1)]
     content = "\r\n".join(
         [
             "@echo off",
             "setlocal",
             *env_lines,
             f'set "EA_PATH={escape_batch_value(ea_launcher)}"',
-            f'set "GAME_DIR_WIN={escape_batch_value(game_dir_win)}"',
-            *mod_data_lines,
-            "start \"\" /b \"%EA_PATH%\"",
+            f'set "GAME_EXE_PATH={escape_batch_value(game_exe_path)}"',
+            "if \"%EA_PATH:~1,1%\"==\":\" (",
+            "  start \"\" /b /exec \"%EA_PATH%\"",
+            ") else (",
+            "  start \"\" /b /unix \"%EA_PATH%\"",
+            ")",
             f"ping -n {ea_delay_seconds + 1} 127.0.0.1 >nul",
-            f'"%GAME_DIR_WIN%\\{exe_name}" {game_args_line}'.strip(),
+            f'"%GAME_EXE_PATH%" {game_args_line}'.strip(),
             "endlocal",
             "exit /b %ERRORLEVEL%",
             "",
@@ -289,22 +275,20 @@ def main() -> int:
         if is_proton_runner:
             game_dir_raw = str(ns.game_dir)
             launch_args_for_env = launch_args.copy()
-            game_dir_win = proton_path_to_windows(game_dir_raw).rstrip("\\/")
-            game_exe_for_env = f"{game_dir_win}\\{exe_name}"
-            ea_launcher_win = proton_path_to_windows(str(ns.ea_launcher))
+            game_dir_root = game_dir_raw.rstrip("/\\")
+            game_exe_for_env = f"{game_dir_root}/{exe_name}"
             proton_env = {
                 "EARtPLaunchCode": get_rtp_launch_code(),
                 "ContentId": "1026482",
                 "GW_LAUNCH_ARGS": subprocess.list2cmdline(launch_args_for_env),
+                "GAME_DATA_DIR": f"{game_dir_root}/ModData/{ns.mod_pack}" if ns.use_mods else "",
             }
             proton_script_path = write_proton_launch_script(
-                ea_launcher_win,
+                str(ns.ea_launcher),
                 game_exe_for_env,
-                exe_name,
                 launch_args,
                 proton_env,
                 ns.ea_delay_seconds,
-                ns.mod_pack if ns.use_mods else None,
             )
             game_cmd = build_proton_dual_launch_command(runner, proton_script_path)
         else:
