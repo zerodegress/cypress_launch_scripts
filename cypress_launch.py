@@ -253,10 +253,10 @@ def main() -> int:
         launch_args = build_launch_args(ns, game_dir)
 
         source_dll = launcher_dir / f"cypress_{ns.game}.dll"
-        if not is_proton_runner:
-            assert target_dll is not None
-            if not target_dll.exists():
-                shutil.copy2(source_dll, target_dll)
+
+        assert target_dll is not None
+        if not target_dll.exists():
+            shutil.copy2(source_dll, target_dll)
 
         env = os.environ.copy()
         if not is_proton_runner:
@@ -313,7 +313,7 @@ def main() -> int:
         return 1
     finally:
         try:
-            if not is_proton_runner and target_dll is not None:
+            if target_dll is not None:
                 target_dll.unlink(missing_ok=True)
             if proton_script_path is not None:
                 proton_script_path.unlink(missing_ok=True)
