@@ -25,7 +25,9 @@ PROTONPATH=/path/to/proton \
   --username your_name \
   --runner umu-run \
   --launcher-dir ~/Downloads/CypressLauncher-vX.Y.Z \
-  --ea-launcher "C:/Program Files/Electronic Arts/EA Desktop/.../EALauncher.exe"
+  --ea-launcher "C:/Program Files/Electronic Arts/EA Desktop/.../EALauncher.exe" \
+  --use-mods \
+  --mod-pack Default
 ```
 
 ### 3) 常用参数
@@ -53,3 +55,20 @@ PROTONPATH=/path/to/proton \
 ## 服务端
 
 服务端使用 `cypress_launch_server.py`，不需要 `--ea-launcher`。
+
+### Linux 服务端启动示例
+
+```bash
+WINEPREFIX=/path/to/prefix \
+PROTONPATH=/path/to/proton \
+./cypress_launch_server.py \
+  --game GW2 \
+  --game-dir /home/zerodegress/Games/ea-app/drive_c/Program\ Files/EA\ Games/Plants\ vs\ Zombies\ Garden\ Warfare\ 2 \
+  --device-ip 127.0.0.1 \
+  --level Level_Coop_ZombossFactory \
+  --inclusion 'GameMode=GraveyardOps0;TOD=Day;HostedMode=ServerHosted' \
+  --launcher-dir ~/Downloads/CypressLauncher-vX.Y.Z \
+  --runner umu-run \
+  --use-mods \
+  --mod-pack Default
+```
